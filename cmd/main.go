@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"html/template"
-	"mymod/pkg/postgres"
 	"net/http"
 
+	"mymod/pkg/postgres"
+
 	"github.com/gorilla/sessions"
-	_ "golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -52,8 +53,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 		temp_passw := r.FormValue("password")
 
 		//examination avalible
-		check_account := postgres.CheckAvailibleUsers(temp_login, temp_passw)
-		if check_account {
+		check_account := postgres.CheckPassword(temp_login)
+		err := bcrypt.CompareHashAndPassword([]byte(check_account), []byte(temp_passw))
+		if err == nil {
 			// Set user as authenticated
 			session.Values["authenticated"] = true
 			err := session.Save(r, w)
@@ -61,9 +63,11 @@ func login(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Error saving session", http.StatusInternalServerError)
 				return
 			}
+			fmt.Println("все прошло")
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
+
 		http.Error(w, "Invalid login credentials", http.StatusUnauthorized)
 		return
 	}
@@ -89,14 +93,14 @@ func registration(w http.ResponseWriter, r *http.Request) {
 		temppassw := r.FormValue("password")
 		tempconfirmpassw := r.FormValue("password_confirm")
 		if temppassw == tempconfirmpassw {
-			err := postgres.InsertDb(templogin, temppassw)
+			hashPassword, _ := bcrypt.GenerateFromPassword([]byte(temppassw), 12)
+			err := postgres.InsertDb(templogin, string(hashPassword))
 			if err != nil {
 				fmt.Println(err.Error())
 			}
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
 		}
-
-		http.Redirect(w, r, "/login", http.StatusFound)
-		return
 	}
 	tmp, err := template.ParseFiles("./ui/html/registration.html")
 	if err != nil {
